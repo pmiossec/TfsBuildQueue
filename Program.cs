@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Data;
 using System.Text.RegularExpressions;
+using System.Threading;
 using Microsoft.TeamFoundation.Client;
 using Microsoft.TeamFoundation.Build.Client;
 
@@ -15,11 +16,44 @@ namespace TFSBuildQueue
         static void Main(string[] args)
         {
             int buildCount = 0;
-            string tfsUrl = args.Length == 1 ? args[0] : ConfigurationManager.AppSettings["TFS_URL"]; ;
+            string tfsUrl  = null;
+            bool loop = false;
+            if (args.Length > 0)
+            {
+                if (args.Length > 2)
+                {
+                    DisplayHelp();
+                }
+                loop = args[args.Length - 1] == "--loop";
+                if (args[0].StartsWith("http"))
+                    tfsUrl = args[0];
+                
+            }
+            if(tfsUrl == null)
+                tfsUrl = ConfigurationManager.AppSettings["TFS_URL"];
+            if (tfsUrl == null)
+                DisplayHelp();
             Console.WriteLine("TFS Build Queue: " + tfsUrl);
             TfsTeamProjectCollection tfs = TfsTeamProjectCollectionFactory.GetTeamProjectCollection(new Uri(tfsUrl));
             IBuildServer bs = tfs.GetService<IBuildServer>();
             IQueuedBuildSpec qbSpec = bs.CreateBuildQueueSpec("*", "*");
+
+            do
+            {
+                DisplayBuilds(bs, qbSpec, buildCount);
+                if(loop)
+                    Thread.Sleep(5000);
+            } while (loop);
+        }
+
+        private static void DisplayHelp()
+        {
+            Console.WriteLine("usage: TFSBuildQueue.exe [http://tfs.server.url/tfs] [--loop]");
+            Environment.Exit(1);
+        }
+
+        private static void DisplayBuilds(IBuildServer bs, IQueuedBuildSpec qbSpec, int buildCount)
+        {
             IQueuedBuildQueryResult qbResults = bs.QueryQueuedBuilds(qbSpec);
 
             // Define DataTable for storage and manipulation of currently queued builds.
@@ -37,7 +71,7 @@ namespace TFSBuildQueue
             // Query TFS For Queued builds and write each build to QBTable
             foreach (IQueuedBuild qb in qbResults.QueuedBuilds)
             {
-                if(qb.Build != null)
+                if (qb.Build != null)
                     qb.Build.RefreshAllDetails();
                 string RequestedBy = qb.RequestedBy;
                 if (qb.RequestedBy != qb.RequestedFor)
@@ -71,7 +105,7 @@ namespace TFSBuildQueue
                     RequestedBy,
                     qb.Status.ToString(),
                     buildMachineStr
-                );
+                    );
                 buildCount++;
             }
 
@@ -87,7 +121,6 @@ namespace TFSBuildQueue
                 for (int i = 0; i < _columns.Count(); i++)
                 {
                     wishedColSize.Add(datas.Select(e => e[i].Length).Max());
-
                 }
                 WriteData(datas, wishedColSize);
             }
