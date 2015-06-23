@@ -2,9 +2,7 @@
 using System.Configuration;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Data;
-using System.Text.RegularExpressions;
 using System.Threading;
 using Microsoft.TeamFoundation.Client;
 using Microsoft.TeamFoundation.Build.Client;
@@ -15,7 +13,6 @@ namespace TFSBuildQueue
     {
         static void Main(string[] args)
         {
-            int buildCount = 0;
             string tfsUrl  = null;
             bool loop = false;
             if (args.Length > 0)
@@ -40,7 +37,7 @@ namespace TFSBuildQueue
 
             do
             {
-                DisplayBuilds(bs, qbSpec, buildCount);
+                DisplayBuilds(bs, qbSpec);
                 if(loop)
                     Thread.Sleep(5000);
             } while (loop);
@@ -52,20 +49,21 @@ namespace TFSBuildQueue
             Environment.Exit(1);
         }
 
-        private static void DisplayBuilds(IBuildServer bs, IQueuedBuildSpec qbSpec, int buildCount)
+        private static void DisplayBuilds(IBuildServer bs, IQueuedBuildSpec qbSpec)
         {
+            int buildCount = 0;
             IQueuedBuildQueryResult qbResults = bs.QueryQueuedBuilds(qbSpec);
 
             // Define DataTable for storage and manipulation of currently queued builds.
-            DataTable QBTable = new DataTable();
-            QBTable.Columns.Add("Project");
-            QBTable.Columns.Add("BuildDefinition");
+            DataTable queuedBuildTable = new DataTable();
+            queuedBuildTable.Columns.Add("Project");
+            queuedBuildTable.Columns.Add("BuildDefinition");
             //QBTable.Columns.Add("Priority");
-            QBTable.Columns.Add("Date");
-            QBTable.Columns.Add("ElapsedTime");
-            QBTable.Columns.Add("User");
-            QBTable.Columns.Add("BuildStatus");
-            QBTable.Columns.Add("BuildMachine");
+            queuedBuildTable.Columns.Add("Date");
+            queuedBuildTable.Columns.Add("ElapsedTime");
+            queuedBuildTable.Columns.Add("User");
+            queuedBuildTable.Columns.Add("BuildStatus");
+            queuedBuildTable.Columns.Add("BuildMachine");
 
             DateTime currentTime = DateTime.Now;
             // Query TFS For Queued builds and write each build to QBTable
@@ -73,11 +71,11 @@ namespace TFSBuildQueue
             {
                 if (qb.Build != null)
                     qb.Build.RefreshAllDetails();
-                string RequestedBy = qb.RequestedBy;
+                string requestedBy = qb.RequestedBy;
                 if (qb.RequestedBy != qb.RequestedFor)
                 {
                     //RequestedBy = String.Concat(qb.RequestedBy, " (for ", qb.RequestedFor, ")");
-                    RequestedBy = qb.RequestedFor;
+                    requestedBy = qb.RequestedFor;
                 }
                 TimeSpan elapsedTime = currentTime.Subtract(qb.QueueTime);
                 elapsedTime = new TimeSpan(elapsedTime.Days, elapsedTime.Hours, elapsedTime.Minutes, elapsedTime.Seconds);
@@ -96,13 +94,13 @@ namespace TFSBuildQueue
                 }
                 var buildMachineStr = qb.BuildController.Name + " (" + buildAgentStr + ")";
 
-                QBTable.Rows.Add(
+                queuedBuildTable.Rows.Add(
                     tfsTeamproject,
                     qb.BuildDefinition.Name,
                     //qb.Priority.ToString(),
                     qb.QueueTime.Date == currentTime.Date ? qb.QueueTime.ToLongTimeString() : qb.QueueTime.ToString(),
                     elapsedTimeString,
-                    RequestedBy,
+                    requestedBy,
                     qb.Status.ToString(),
                     buildMachineStr
                     );
@@ -110,7 +108,7 @@ namespace TFSBuildQueue
             }
 
             // Sorts QBTable on Build controller then by date
-            var qbSorted = QBTable.Select("", "BuildMachine ASC, Date ASC");
+            var qbSorted = queuedBuildTable.Select("", "BuildMachine ASC, Date ASC");
 
             var datas = ConvertToString(qbSorted);
 
@@ -222,9 +220,6 @@ namespace TFSBuildQueue
                 }
             }
             return string.Empty;
-
         }
-
     }
-
 }
