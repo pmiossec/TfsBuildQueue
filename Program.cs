@@ -35,11 +35,28 @@ namespace TFSBuildQueue
             IBuildServer bs = tfs.GetService<IBuildServer>();
             IQueuedBuildSpec qbSpec = bs.CreateBuildQueueSpec("*", "*");
 
+            var previousBuildCount = -1;
             do
             {
-                DisplayBuilds(bs, qbSpec);
-                if(loop)
-                    Thread.Sleep(5000);
+                var buildsCount = DisplayBuilds(bs, qbSpec);
+                if (loop)
+                {
+                    if (buildsCount == 0 && previousBuildCount == buildsCount)
+                    {
+                        Console.Write(".");
+                        Thread.Sleep(30000);
+                    }
+                    else
+                    {
+                        Console.WriteLine("\nTotal Builds Queued: " + buildsCount);
+                        Thread.Sleep(5000);
+                    }
+                    previousBuildCount = buildsCount;
+                }
+                else
+                {
+                    Console.WriteLine("\nTotal Builds Queued: " + buildsCount);
+                }
             } while (loop);
         }
 
@@ -49,81 +66,88 @@ namespace TFSBuildQueue
             Environment.Exit(1);
         }
 
-        private static void DisplayBuilds(IBuildServer bs, IQueuedBuildSpec qbSpec)
+        private static int DisplayBuilds(IBuildServer bs, IQueuedBuildSpec qbSpec)
         {
-            int buildCount = 0;
-            IQueuedBuildQueryResult qbResults = bs.QueryQueuedBuilds(qbSpec);
-
-            // Define DataTable for storage and manipulation of currently queued builds.
-            DataTable queuedBuildTable = new DataTable();
-            queuedBuildTable.Columns.Add("Project");
-            queuedBuildTable.Columns.Add("BuildDefinition");
-            //QBTable.Columns.Add("Priority");
-            queuedBuildTable.Columns.Add("Date");
-            queuedBuildTable.Columns.Add("ElapsedTime");
-            queuedBuildTable.Columns.Add("User");
-            queuedBuildTable.Columns.Add("BuildStatus");
-            queuedBuildTable.Columns.Add("BuildMachine");
-
-            DateTime currentTime = DateTime.Now;
-            // Query TFS For Queued builds and write each build to QBTable
-            foreach (IQueuedBuild qb in qbResults.QueuedBuilds)
+            try
             {
-                if (qb.Build != null)
-                    qb.Build.RefreshAllDetails();
-                string requestedBy = qb.RequestedBy;
-                if (qb.RequestedBy != qb.RequestedFor)
-                {
-                    //RequestedBy = String.Concat(qb.RequestedBy, " (for ", qb.RequestedFor, ")");
-                    requestedBy = qb.RequestedFor;
-                }
-                TimeSpan elapsedTime = currentTime.Subtract(qb.QueueTime);
-                elapsedTime = new TimeSpan(elapsedTime.Days, elapsedTime.Hours, elapsedTime.Minutes, elapsedTime.Seconds);
-                string elapsedTimeString = elapsedTime.ToString();
-                String tfsTeamproject;
-                String buildAgentStr;
-                if (qb.Status != QueueStatus.InProgress)
-                {
-                    tfsTeamproject = "-------";
-                    buildAgentStr = "N/A";
-                }
-                else
-                {
-                    tfsTeamproject = qb.Build.TeamProject;
-                    buildAgentStr = GetBuildAgent(qb.Build);
-                }
-                var buildMachineStr = qb.BuildController.Name + " (" + buildAgentStr + ")";
+                int buildCount = 0;
+                IQueuedBuildQueryResult qbResults = bs.QueryQueuedBuilds(qbSpec);
 
-                queuedBuildTable.Rows.Add(
-                    tfsTeamproject,
-                    qb.BuildDefinition.Name,
-                    //qb.Priority.ToString(),
-                    qb.QueueTime.Date == currentTime.Date ? qb.QueueTime.ToLongTimeString() : qb.QueueTime.ToString(),
-                    elapsedTimeString,
-                    requestedBy,
-                    qb.Status.ToString(),
-                    buildMachineStr
-                    );
-                buildCount++;
+                // Define DataTable for storage and manipulation of currently queued builds.
+                DataTable queuedBuildTable = new DataTable();
+                queuedBuildTable.Columns.Add("Project");
+                queuedBuildTable.Columns.Add("BuildDefinition");
+                //QBTable.Columns.Add("Priority");
+                queuedBuildTable.Columns.Add("Date");
+                queuedBuildTable.Columns.Add("ElapsedTime");
+                queuedBuildTable.Columns.Add("User");
+                queuedBuildTable.Columns.Add("BuildStatus");
+                queuedBuildTable.Columns.Add("BuildMachine");
+
+                DateTime currentTime = DateTime.Now;
+                // Query TFS For Queued builds and write each build to QBTable
+                foreach (var qb in qbResults.QueuedBuilds)
+                {
+                    if (qb.Build != null)
+                        qb.Build.RefreshAllDetails();
+                    string requestedBy = qb.RequestedBy;
+                    if (qb.RequestedBy != qb.RequestedFor)
+                    {
+                        //RequestedBy = String.Concat(qb.RequestedBy, " (for ", qb.RequestedFor, ")");
+                        requestedBy = qb.RequestedFor;
+                    }
+                    TimeSpan elapsedTime = currentTime.Subtract(qb.QueueTime);
+                    elapsedTime = new TimeSpan(elapsedTime.Days, elapsedTime.Hours, elapsedTime.Minutes, elapsedTime.Seconds);
+                    string elapsedTimeString = elapsedTime.ToString();
+                    String tfsTeamproject;
+                    String buildAgentStr;
+                    if (qb.Status != QueueStatus.InProgress)
+                    {
+                        tfsTeamproject = "-------";
+                        buildAgentStr = "N/A";
+                    }
+                    else
+                    {
+                        tfsTeamproject = qb.Build.TeamProject;
+                        buildAgentStr = GetBuildAgent(qb.Build);
+                    }
+                    var buildMachineStr = qb.BuildController.Name + " (" + buildAgentStr + ")";
+
+                    queuedBuildTable.Rows.Add(
+                        tfsTeamproject,
+                        qb.BuildDefinition.Name,
+                        //qb.Priority.ToString(),
+                        qb.QueueTime.Date == currentTime.Date ? qb.QueueTime.ToLongTimeString() : qb.QueueTime.ToString(),
+                        elapsedTimeString,
+                        requestedBy,
+                        qb.Status.ToString(),
+                        buildMachineStr
+                        );
+                    buildCount++;
+                }
+
+                // Sorts QBTable on Build controller then by date
+                var qbSorted = queuedBuildTable.Select("", "BuildMachine ASC, Date ASC");
+
+                var datas = ConvertToString(qbSorted);
+
+                if (buildCount != 0)
+                {
+                    // Writes the headers
+                    List<int> wishedColSize = new List<int>();
+                    for (int i = 0; i < _columns.Count(); i++)
+                    {
+                        wishedColSize.Add(datas.Select(e => e[i].Length).Max());
+                    }
+                    WriteData(datas, wishedColSize);
+                }
+                return buildCount;
             }
-
-            // Sorts QBTable on Build controller then by date
-            var qbSorted = queuedBuildTable.Select("", "BuildMachine ASC, Date ASC");
-
-            var datas = ConvertToString(qbSorted);
-
-            if (buildCount != 0)
+            catch (Exception)
             {
-                // Writes the headers
-                List<int> wishedColSize = new List<int>();
-                for (int i = 0; i < _columns.Count(); i++)
-                {
-                    wishedColSize.Add(datas.Select(e => e[i].Length).Max());
-                }
-                WriteData(datas, wishedColSize);
+                Console.WriteLine("Server not reachable :(");
+                return 0;
             }
-
-            Console.WriteLine("\nTotal Builds Queued: " + buildCount);
         }
 
         private static IEnumerable<List<string>> ConvertToString(DataRow[] qbSorted)
