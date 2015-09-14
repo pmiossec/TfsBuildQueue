@@ -39,6 +39,7 @@ namespace TFSBuildQueue
             do
             {
                 var buildsCount = DisplayBuilds(bs, qbSpec);
+
                 if (loop)
                 {
                     if (buildsCount == 0 && previousBuildCount == buildsCount)
@@ -49,6 +50,9 @@ namespace TFSBuildQueue
                     else
                     {
                         Console.WriteLine("\nTotal Builds Queued: " + buildsCount);
+
+                        DisplayFinishedBuilds(bs);
+
                         Thread.Sleep(5000);
                     }
                     previousBuildCount = buildsCount;
@@ -58,6 +62,46 @@ namespace TFSBuildQueue
                     Console.WriteLine("\nTotal Builds Queued: " + buildsCount);
                 }
             } while (loop);
+        }
+
+        private static void DisplayFinishedBuilds(IBuildServer bs)
+        {
+            var previousColor = Console.ForegroundColor;
+            try
+            {
+                var buildSpec = bs.CreateBuildDetailSpec("*", "*");
+                buildSpec.InformationTypes = null;
+                buildSpec.MinFinishTime = DateTime.Now.AddMinutes(-5);
+                var buildDetails = bs.QueryBuilds(buildSpec).Builds.ToList();
+                if (buildDetails.Any())
+                {
+                    Console.WriteLine("Build just finished:");
+                }
+                foreach (var buildFinished in buildDetails)
+                {
+                    switch (buildFinished.Status)
+                    {
+                        case BuildStatus.Failed:
+                            Console.ForegroundColor = ConsoleColor.Red;
+                            break;
+                        case BuildStatus.Stopped:
+                        case BuildStatus.PartiallySucceeded:
+                            Console.ForegroundColor = ConsoleColor.Yellow;
+                            break;
+                        case BuildStatus.Succeeded:
+                            Console.ForegroundColor = ConsoleColor.Green;
+                            break;
+                    }
+                    Console.WriteLine(buildFinished.TeamProject + " " + buildFinished.BuildDefinition.Name + " => " +
+                                      buildFinished.Status);
+                }
+            }
+            catch (Exception)
+            {
+                Console.WriteLine("Server not reachable :(");
+            }
+            Console.ForegroundColor = previousColor;
+
         }
 
         private static void DisplayHelp()
