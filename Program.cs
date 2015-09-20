@@ -36,8 +36,16 @@ namespace TFSBuildQueue
             IQueuedBuildSpec qbSpec = bs.CreateBuildQueueSpec("*", "*");
 
             var previousBuildCount = -1;
+            var cursorPosition = Console.CursorTop;
+            var foundBuilds = false;
             do
             {
+                if (loop && foundBuilds)
+                {
+                    Console.SetCursorPosition(0, cursorPosition);
+                    ClearScreen(previousBuildCount+2);
+                    Console.SetCursorPosition(0, cursorPosition);
+                }
                 var buildsCount = DisplayBuilds(bs, qbSpec);
 
                 if (loop)
@@ -56,12 +64,23 @@ namespace TFSBuildQueue
                         Thread.Sleep(5000);
                     }
                     previousBuildCount = buildsCount;
+                    foundBuilds = (buildsCount != 0);
+
                 }
                 else
                 {
                     Console.WriteLine("\nTotal Builds Queued: " + buildsCount);
                 }
             } while (loop);
+        }
+
+        private static void ClearScreen(int nbLines)
+        {
+            var emptyLine = new string(' ', LineSize);
+            for (int i = 0; i < nbLines; i++)
+            {
+                Console.WriteLine(emptyLine);
+            }
         }
 
         private static void DisplayFinishedBuilds(IBuildServer bs)
@@ -228,6 +247,8 @@ namespace TFSBuildQueue
                 "Build Controller (Agent)"
             };
 
+        private static int LineSize = 0;
+
         static void WriteData(IEnumerable<List<string>> datas, List<int> wishedColSize)
         {
             Console.WriteLine(string.Empty);
@@ -253,6 +274,7 @@ namespace TFSBuildQueue
                 }
                 Console.WriteLine(string.Empty);
             }
+            LineSize = colsSize.Aggregate((x, y) => x + y);
         }
 
         public static string GetBuildAgent(IBuildDetail build)  //IQueuedBuild.Build
