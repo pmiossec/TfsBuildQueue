@@ -63,7 +63,7 @@ namespace TFSBuildQueue
 
                         Thread.Sleep(5000);
                     }
-                    previousBuildCount = buildsCount;
+                    previousBuildCount = Console.CursorTop - cursorPosition;
                     foundBuilds = (buildsCount != 0);
 
                 }
@@ -251,7 +251,7 @@ namespace TFSBuildQueue
 
         static void WriteData(IEnumerable<List<string>> datas, List<int> wishedColSize)
         {
-            Console.WriteLine(string.Empty);
+            ClearScreen(1);
             var colsSize = new List<int>();
             int i = 0;
             foreach (var col in _columns)
@@ -259,12 +259,12 @@ namespace TFSBuildQueue
                 colsSize.Add(WriteColumHeader(col, wishedColSize[i]));
                 i++;
             }
-            Console.WriteLine(string.Empty);
+            ClearScreen(1);
             foreach (var colSize in colsSize)
             {
                 WriteColumHeader(string.Empty.PadRight(colSize, '='), colSize);
             }
-            Console.WriteLine(string.Empty);
+            ClearScreen(1);
             foreach (var row in datas)
             {
                 for (int iCol = 0; iCol < _columns.Count(); iCol++)
@@ -272,7 +272,7 @@ namespace TFSBuildQueue
                     var size = colsSize[iCol];
                     WriteColumHeader(row[iCol].PadRight(size), size);
                 }
-                Console.WriteLine(string.Empty);
+                ClearScreen(1);
             }
             LineSize = colsSize.Aggregate((x, y) => x + y);
         }
